@@ -25,9 +25,14 @@ jobs:
       - name: Install dependencies
         run: pip install jupyter nbconvert
         
-      - name: Convert notebooks to HTML
+      - name: Clean previous HTML files
         run: |
           mkdir -p docs
+          # Eliminar todos los archivos HTML existentes excepto index.html
+          find docs -name "*.html" ! -name "index.html" -delete
+          
+      - name: Convert notebooks to HTML
+        run: |
           # Buscar notebooks recursivamente y convertirlos, excluyendo la carpeta .git
           find . -name "*.ipynb" -not -path "./.git/*" -exec jupyter nbconvert --to html --output-dir docs {} \;
           
