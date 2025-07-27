@@ -1,0 +1,82 @@
+# Workflow para desplegar notebooks en GitHub Pages
+name: Deploy Notebooks to GitHub Pages
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:  # Permite ejecutarlo manualmente
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          
+      - name: Install dependencies
+        run: pip install jupyter nbconvert
+        
+      - name: Convert notebooks to HTML
+        run: |
+          mkdir -p docs
+          # Buscar notebooks recursivamente y convertirlos, excluyendo la carpeta .git
+          find . -name "*.ipynb" -not -path "./.git/*" -exec jupyter nbconvert --to html --output-dir docs {} \;
+          
+      - name: Create enhanced index page
+        run: |
+          cat > docs/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="es">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Mis Notebooks de Jupyter</title>
+              <style>
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                  h1 { color: #333; border-bottom: 2px solid #4CAF50; }
+                  ul { list-style-type: none; padding: 0; }
+                  li { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+                  a { text-decoration: none; color: #4CAF50; font-weight: bold; }
+                  a:hover { color: #45a049; }
+                  .date { color: #666; font-size: 0.9em; }
+              </style>
+          </head>
+          <body>
+              <h1>📓 Mis Notebooks de Jupyter</h1>
+              <p>Colección de notebooks con análisis de datos, machine learning y más.</p>
+              <ul>
+          EOF
+          
+          # Generar enlaces para cada notebook
+          for file in docs/*.html; do
+            if [ "$(basename "$file")" != "index.html" ]; then
+              name=$(basename "$file" .html)
+              # Convertir guiones a espacios y capitalizar
+              title=$(echo "$name" | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
+              echo "<li><a href=\"$name.html\">$title</a><div class=\"date\">Actualizado: $(date +'%Y-%m-%d')</div></li>" >> docs/index.html
+            fi
+          done
+          
+          cat >> docs/index.html << 'EOF'
+              </ul>
+              <footer style="margin-top: 40px; text-align: center; color: #666;">
+                  <p>Generado automáticamente con GitHub Actions</p>
+              </footer>
+          </body>
+          </html>
+          EOF
+          
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
