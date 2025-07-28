@@ -3,7 +3,7 @@ name: Deploy Notebooks to GitHub Pages
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main, master ]
   workflow_dispatch:  # Permite ejecutarlo manualmente
 
 permissions:
@@ -15,26 +15,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
           
       - name: Install dependencies
-        run: pip install jupyter nbconvert
-        
-      - name: Clean previous HTML files
         run: |
+          pip install jupyter nbconvert
+          pip install --upgrade pip
+          
+      - name: Clean docs directory completely
+        run: |
+          # Eliminar completamente la carpeta docs si existe
+          rm -rf docs
+          # Crear carpeta docs limpia
           mkdir -p docs
-          # Eliminar todos los archivos HTML existentes excepto index.html
-          find docs -name "*.html" ! -name "index.html" -delete
           
       - name: Convert notebooks to HTML
         run: |
           # Buscar notebooks recursivamente y convertirlos, excluyendo la carpeta .git
-          find . -name "*.ipynb" -not -path "./.git/*" -exec jupyter nbconvert --to html --output-dir docs {} \;
+          find . -name "*.ipynb" -not -path "./.git/*" -not -path "./.ipynb_checkpoints/*" | while read notebook; do
+            echo "Converting: $notebook"
+            jupyter nbconvert --to html --output-dir docs "$notebook"
+          done
           
       - name: Create enhanced index page
         run: |
@@ -46,37 +53,65 @@ jobs:
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Mis Notebooks de Jupyter</title>
               <style>
-                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                  h1 { color: #333; border-bottom: 2px solid #4CAF50; }
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+                  .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                  h1 { color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
                   ul { list-style-type: none; padding: 0; }
-                  li { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-                  a { text-decoration: none; color: #4CAF50; font-weight: bold; }
+                  li { margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; transition: all 0.3s ease; }
+                  li:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); transform: translateY(-2px); }
+                  a { text-decoration: none; color: #4CAF50; font-weight: bold; font-size: 1.1em; }
                   a:hover { color: #45a049; }
-                  .date { color: #666; font-size: 0.9em; }
+                  .date { color: #666; font-size: 0.9em; margin-top: 5px; }
+                  .count { color: #888; font-style: italic; margin-bottom: 20px; }
+                  footer { margin-top: 40px; text-align: center; color: #666; border-top: 1px solid #ddd; padding-top: 20px; }
               </style>
           </head>
           <body>
-              <h1>📓 Mis Notebooks de Jupyter</h1>
-              <p>Colección de notebooks con análisis de datos, machine learning y más.</p>
-              <ul>
+              <div class="container">
+                  <h1>📓 Mis Notebooks de Jupyter</h1>
+                  <p>Colección de notebooks con análisis de datos, machine learning y más.</p>
+                  <div class="count" id="notebook-count"></div>
+                  <ul id="notebook-list">
           EOF
           
-          # Generar enlaces para cada notebook
+          # Contar notebooks y generar enlaces
+          notebook_count=0
           for file in docs/*.html; do
             if [ "$(basename "$file")" != "index.html" ]; then
+              notebook_count=$((notebook_count + 1))
               name=$(basename "$file" .html)
-              # Convertir guiones a espacios y capitalizar
-              title=$(echo "$name" | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
-              echo "<li><a href=\"$name.html\">$title</a><div class=\"date\">Actualizado: $(date +'%Y-%m-%d')</div></li>" >> docs/index.html
+              # Convertir guiones y underscores a espacios y capitalizar
+              title=$(echo "$name" | sed 's/[-_]/ /g' | sed 's/\b\w/\U&/g')
+              echo "<li><a href=\"$name.html\">$title</a><div class=\"date\">Actualizado: $(date +'%Y-%m-%d %H:%M')</div></li>" >> docs/index.html
             fi
           done
           
+          # Actualizar el contador en el HTML
+          sed -i "s/id=\"notebook-count\">/id=\"notebook-count\">Total de notebooks: $notebook_count/" docs/index.html
+          
           cat >> docs/index.html << 'EOF'
-              </ul>
-              <footer style="margin-top: 40px; text-align: center; color: #666;">
-                  <p>Generado automáticamente con GitHub Actions</p>
-              </footer>
+                  </ul>
+                  <footer>
+                      <p>🔄 Generado automáticamente con GitHub Actions</p>
+                      <p>Última actualización: <span id="last-update"></span></p>
+                  </footer>
+              </div>
+              <script>
+                  document.getElementById('last-update').textContent = new Date().toLocaleString('es-ES');
+              </script>
           </body>
           </html>
           EOF
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
           

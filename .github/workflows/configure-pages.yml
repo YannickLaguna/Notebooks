@@ -1,0 +1,49 @@
+# Configuración inicial de GitHub Pages
+# Este workflow se ejecuta una sola vez para configurar GitHub Pages
+name: Configure GitHub Pages
+
+on:
+  workflow_dispatch:  # Solo ejecución manual
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Create docs directory
+        run: mkdir -p docs
+        
+      - name: Create initial index
+        run: |
+          cat > docs/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="es">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Configurando GitHub Pages</title>
+          </head>
+          <body>
+              <h1>🚀 Configurando GitHub Pages</h1>
+              <p>Esta página se actualizará automáticamente cuando ejecutes el workflow de despliegue.</p>
+          </body>
+          </html>
+          EOF
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+          
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4 
